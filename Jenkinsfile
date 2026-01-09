@@ -1,16 +1,15 @@
 pipeline {
-    agent any
-
-    // set up tools configured in Jenkins global config
-    tools {
-        maven 'mvn'           // name of Maven installation in Jenkins
+    agent {
+        docker {
+            image 'maven:3.9.6-eclipse-temurin-21'
+            args '-v $HOME/.m2:/root/.m2'
+        }
     }
 
     stages {
-
         stage('Checkout') {
             steps {
-             checkout scm
+                checkout scm
             }
         }
 
