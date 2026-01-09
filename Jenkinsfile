@@ -10,8 +10,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                // checkout code from git (this Jenkinsfile should be in the repo)
-                git "https://github.com/rahultiple31/devops-dec-25/Jenkins.git"
+             checkout scm
             }
         }
 
