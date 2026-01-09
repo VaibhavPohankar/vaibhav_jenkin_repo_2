@@ -20,6 +20,6 @@ public class AppTest
     public void testAppMessage()
     {
         App app = new App();
-        assertEquals("Welcome to vaibhav jenkins 2nd pipeline", app.getMessage());
+        assertEquals("Welcome to vaibhav Docker hosted jenkins 2nd pipeline", app.getMessage());
     }
 }
