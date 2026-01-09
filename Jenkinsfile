@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.9.6-eclipse-temurin-21'
-            args '-v $HOME/.m2:/root/.m2'
-        }
-    }
+    agent any
 
     stages {
         stage('Checkout') {
@@ -13,21 +8,24 @@ pipeline {
             }
         }
 
-        stage('Clean') {
-            steps {
-                sh 'mvn clean'
-            }
-        }
-
         stage('Build') {
             steps {
-                sh 'mvn -B install'
+                sh 'mvn clean package'
             }
         }
 
-        stage('Test') {
+        stage('Docker Build') {
             steps {
-                sh 'mvn test'
+                sh 'docker build -t vaibhav/my-app:latest .'
+            }
+        }
+
+        stage('Docker Run') {
+            steps {
+                sh '''
+                docker rm -f my-app || true
+                docker run -d --name my-app vaibhav/my-app:latest
+                '''
             }
         }
     }
