@@ -11,6 +11,7 @@ pipeline {
         DOCKER_USER = 'dockervibh'
         IMAGE_NAME = 'my-app'
         DOCKER_HUB_IMAGE_NAME = "dockervibh/practice_java:latest"
+        DOCKER_PASS = credentials('DOCKERHUB_PASS')
     }
 
     tools {
