@@ -8,10 +8,8 @@ pipeline {
 
     environment {
         APP_NAME = 'vibh-app'
-        DOCKER_USER = 'dockervibh'
         IMAGE_NAME = 'my-app'
         DOCKER_HUB_IMAGE_NAME = "dockervibh/practice_java:latest"
-        DOCKER_PASS = credentials('DOCKERHUB_PASS')
     }
 
     tools {
@@ -56,9 +54,7 @@ pipeline {
         stage('Docker Image Build') {
             steps {
                 sh '''
-                    docker --version
                     docker build -t $IMAGE_NAME .
-                    docker images
                 '''
             }
         }
