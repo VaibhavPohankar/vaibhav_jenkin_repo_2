@@ -21,16 +21,13 @@ pipeline {
     stages {
         stage('Initialize') {
             steps {
-                echo "Building App: ${APP_NAME}"
-                echo "Environment: ${params.ENV}"
-                echo "Branch: ${params.BRANCH}"
+                echo "Building App: ${APP_NAME} for Env: ${params.ENV}"
                 checkout scm
             }
         }
 
         stage('Build & Test') {
             steps {
-                // 'install' runs clean, compile, and test in one go
                 sh 'mvn -B clean install'
             }
         }
@@ -43,19 +40,16 @@ pipeline {
 
         stage('Docker Push to DockerHub') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'DOCKERHUB_LOGIN',
-                        usernameVariable: 'HUB_USER',
-                        passwordVariable: 'HUB_PASS'
-                    )
-                ]) {
+                // Using 'string' helper for 'Secret text' credential type
+                withCredentials([string(credentialsId: 'DOCKERHUB_LOGIN', variable: 'DOCKER_TOKEN')]) {
                     sh """
-                        # Tagging with the specific environment selected
+                        # Tagging with the chosen environment
                         docker tag ${IMAGE_NAME} ${DOCKER_REPO}:${params.ENV}
                         
-                        # Secure Login and Push
-                        echo "${HUB_PASS}" | docker login -u "${HUB_USER}" --password-stdin
+                        # Login using the Secret Text and hardcoded DOCKER_USER
+                        echo "${DOCKER_TOKEN}" | docker login -u "${DOCKER_USER}" --password-stdin
+                        
+                        # Push to registry
                         docker push ${DOCKER_REPO}:${params.ENV}
                         
                         docker logout
@@ -63,18 +57,20 @@ pipeline {
                 }
             }
         }
+
+        stage('Cleanup Local') {
+            steps {
+                sh "docker rmi ${DOCKER_REPO}:${params.ENV} || true"
+            }
+        }
     }
 
     post {
         always {
-            // Cleanup to save disk space on the Jenkins agent
             sh 'docker image prune -f'
         }
         success {
-            echo "Successfully built and pushed ${IMAGE_NAME} to ${params.ENV}"
-        }
-        failure {
-            echo "Pipeline failed. Check the console output for errors."
+            echo "Successfully pushed to ${params.ENV}"
         }
     }
 }
