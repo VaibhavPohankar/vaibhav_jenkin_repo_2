@@ -9,8 +9,7 @@ pipeline {
     environment {
         APP_NAME = 'vibh-app'
         IMAGE_NAME = 'my-app'
-        DOCKER_USER = 'dockervibh'
-        DOCKER_REPO = 'dockervibh/practice_java'
+        DOCKER_HUB_IMAGE_NAME = "dockervibh/practice_java:latest"
     }
 
     tools {
@@ -19,58 +18,65 @@ pipeline {
     }
 
     stages {
-        stage('Initialize') {
+
+        stage('Print Environment Variables') {
             steps {
-                echo "Building App: ${APP_NAME} for Env: ${params.ENV}"
+                echo "App: ${APP_NAME}"
+                echo "Env: ${params.ENV}"
+                echo "Branch: ${params.BRANCH}"
+            }
+        }
+
+        stage('Checkout') {
+            steps {
                 checkout scm
             }
         }
 
-        stage('Build & Test') {
+        stage('Clean') {
             steps {
-                sh 'mvn -B clean install'
+                sh 'mvn clean'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn -B install'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'mvn test'
             }
         }
 
         stage('Docker Image Build') {
             steps {
-                sh "docker build -t ${IMAGE_NAME} ."
+                sh '''
+                    docker build -t $IMAGE_NAME .
+                '''
             }
         }
 
         stage('Docker Push to DockerHub') {
             steps {
-                // Using 'string' helper for 'Secret text' credential type
-                withCredentials([string(credentialsId: 'DOCKERHUB_LOGIN', variable: 'DOCKER_TOKEN')]) {
-                    sh """
-                        # Tagging with the chosen environment
-                        docker tag ${IMAGE_NAME} ${DOCKER_REPO}:${params.ENV}
-                        
-                        # Login using the Secret Text and hardcoded DOCKER_USER
-                        echo "${DOCKER_TOKEN}" | docker login -u "${DOCKER_USER}" --password-stdin
-                        
-                        # Push to registry
-                        docker push ${DOCKER_REPO}:${params.ENV}
-                        
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'DOCKERHUB_LOGIN',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    sh '''
+                        docker rmi $DOCKER_HUB_IMAGE_NAME || true
+                        docker tag $IMAGE_NAME $DOCKER_HUB_IMAGE_NAME
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push $DOCKER_HUB_IMAGE_NAME
                         docker logout
-                    """
+                    '''
                 }
             }
-        }
-
-        stage('Cleanup Local') {
-            steps {
-                sh "docker rmi ${DOCKER_REPO}:${params.ENV} || true"
-            }
-        }
-    }
-
-    post {
-        always {
-            sh 'docker image prune -f'
-        }
-        success {
-            echo "Successfully pushed to ${params.ENV}"
         }
     }
 }
