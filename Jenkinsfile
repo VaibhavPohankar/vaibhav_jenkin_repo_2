@@ -9,7 +9,8 @@ pipeline {
     environment {
         APP_NAME = 'vibh-app'
         IMAGE_NAME = 'my-app'
-        DOCKER_HUB_IMAGE_NAME = "dockervibh/practice_java:latest"
+        DOCKER_USER = 'dockervibh'
+        DOCKER_REPO = 'dockervibh/practice_java'
     }
 
     tools {
@@ -18,44 +19,25 @@ pipeline {
     }
 
     stages {
-
-        stage('Print Environment Variables') {
+        stage('Initialize') {
             steps {
-                echo "App: ${APP_NAME}"
-                echo "Env: ${params.ENV}"
+                echo "Building App: ${APP_NAME}"
+                echo "Environment: ${params.ENV}"
                 echo "Branch: ${params.BRANCH}"
-            }
-        }
-
-        stage('Checkout') {
-            steps {
                 checkout scm
             }
         }
 
-        stage('Clean') {
+        stage('Build & Test') {
             steps {
-                sh 'mvn clean'
-            }
-        }
-
-        stage('Build') {
-            steps {
-                sh 'mvn -B install'
-            }
-        }
-
-        stage('Test') {
-            steps {
-                sh 'mvn test'
+                // 'install' runs clean, compile, and test in one go
+                sh 'mvn -B clean install'
             }
         }
 
         stage('Docker Image Build') {
             steps {
-                sh '''
-                    docker build -t $IMAGE_NAME .
-                '''
+                sh "docker build -t ${IMAGE_NAME} ."
             }
         }
 
@@ -63,20 +45,36 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'DOCKERHUB_CREDENTIALS',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
+                        credentialsId: 'DOCKERHUB_LOGIN',
+                        usernameVariable: 'HUB_USER',
+                        passwordVariable: 'HUB_PASS'
                     )
                 ]) {
-                    sh '''
-                        docker rmi $DOCKER_HUB_IMAGE_NAME || true
-                        docker tag $IMAGE_NAME $DOCKER_HUB_IMAGE_NAME
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push $DOCKER_HUB_IMAGE_NAME
+                    sh """
+                        # Tagging with the specific environment selected
+                        docker tag ${IMAGE_NAME} ${DOCKER_REPO}:${params.ENV}
+                        
+                        # Secure Login and Push
+                        echo "${HUB_PASS}" | docker login -u "${HUB_USER}" --password-stdin
+                        docker push ${DOCKER_REPO}:${params.ENV}
+                        
                         docker logout
-                    '''
+                    """
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            // Cleanup to save disk space on the Jenkins agent
+            sh 'docker image prune -f'
+        }
+        success {
+            echo "Successfully built and pushed ${IMAGE_NAME} to ${params.ENV}"
+        }
+        failure {
+            echo "Pipeline failed. Check the console output for errors."
         }
     }
 }
