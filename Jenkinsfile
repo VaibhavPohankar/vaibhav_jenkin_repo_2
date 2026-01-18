@@ -10,6 +10,7 @@ pipeline {
         APP_NAME = 'vibh-app'
         IMAGE_NAME = 'my-app'
         DOCKER_HUB_IMAGE_NAME = "dockervibh/practice_java:latest"
+        DOCKER_USER = "dockervibh"   // static since token has no username
     }
 
     tools {
@@ -61,17 +62,11 @@ pipeline {
 
         stage('Docker Push to DockerHub') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'DOCKERHUB_LOGIN',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
+                withCredentials([string(credentialsId: 'DOCKERHUB_LOGIN', variable: 'DOCKER_TOKEN')]) {
                     sh '''
                         docker rmi $DOCKER_HUB_IMAGE_NAME || true
                         docker tag $IMAGE_NAME $DOCKER_HUB_IMAGE_NAME
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USER" --password-stdin
                         docker push $DOCKER_HUB_IMAGE_NAME
                         docker logout
                     '''
