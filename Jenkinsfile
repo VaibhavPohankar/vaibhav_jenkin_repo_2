@@ -1,67 +1,88 @@
 pipeline {
-    agent any   // don't run on controller
+    agent any
 
-    parameters {
-        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Deploy environment')
+parameters {
+        string(name: 'main', defaultValue: 'main', description: 'Branch to build from')
+  choice(name: 'ENV', choices: ['dev', 'qa', 'prod'], description: 'Select the deployment environment')
     }
-
+  
     environment {
-        DOCKER_USER  = 'vaibhav'
-        IMAGE_NAME   = 'my-app'
-        DOCKER_CREDS = credentials('DOCKER_PASS')
+    APP_NAME = 'vibh-app'
+    DOCKER_USER = dockervibh
+    DOCKER_PASS = 'DOCKER_PASS'
+    IMAGE_NAME = 'my-app'
+    DOCKER_HUB_IMAGE_NAME = "dockervibh/practice_java:latest"
+    }
+    
+tools {
+        jdk 'java11'
+        maven 'mvn'
     }
 
     stages {
+        stage('print enviroment variables') {
+
+            steps {
+                    echo "Application name : $APP_NAME"
+                    echo "Dev enviroment : $ENV_NAME"
+                    echo "Hello ${params.PERSON}"
+                    echo "Enviroment: ${params.CHOICE}"
+            }
+        }
 
         stage('Checkout') {
-            agent { label 'docker-builder' }
             steps {
                 checkout scm
             }
         }
 
-        stage('Maven Build') {
-            agent { label 'docker-builder' }
+        stage('Clean') {
+            steps {
+                sh 'mvn clean'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn -B install'
+            }
+        }
+        stage('Test') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+        stage('Docker image build') {
             steps {
                 sh '''
-                docker run --rm -v "$PWD":/app -w /app \
-                maven:3.9.6-eclipse-temurin-21 mvn -B clean package
+                    docker --version
+                    docker build -t $IMAGE_NAME .
+                    docker images
                 '''
             }
         }
+             stage('Docker push to dockerHub repository') {
 
-        stage('Docker Build & Tag') {
-            agent { label 'docker-builder' }
             steps {
-                sh "docker build -t ${DOCKER_USER}/${IMAGE_NAME}:${params.ENVIRONMENT} ."
+                withCredentials([usernamePassword(credentialsId: 'DOCKERHUB_LOGIN', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
+
+                sh '''
+                    echo "docker delete image if exists"
+                    docker rmi $DOCKER_HUB_IMAGE_NAME || true
+                    echo "tag change"
+                    docker tag $IMAGE_NAME $DOCKER_HUB_IMAGE_NAME
+                    echo "Docker login"
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" -p $DOCKER_PASS
+                    echo "docker push"
+                    docker push $DOCKER_HUB_IMAGE_NAME
+                    echo "docker logout"
+                    docker logout
+
+                '''
+                }
+
             }
+
         }
 
-        stage('Push to Docker Hub') {
-            agent { label 'docker-builder' }
-            steps {
-                sh "echo \$DOCKER_CREDS_PSW | docker login -u \$DOCKER_CREDS_USR --password-stdin"
-                sh "docker push ${DOCKER_USER}/${IMAGE_NAME}:${params.ENVIRONMENT}"
-            }
-        }
-
-        stage('Local Deploy') {
-            agent { label 'deploy-node' }   // optional separate deploy node
-            steps {
-                sh "docker rm -f ${IMAGE_NAME} || true"
-                sh "docker run -d --name ${IMAGE_NAME} -p 8080:8080 ${DOCKER_USER}/${IMAGE_NAME}:${params.ENVIRONMENT}"
-            }
-        }
     }
-
-    post {
-        always {
-            agent { label 'docker-builder' }
-            steps {
-                archiveArtifacts artifacts: 'target/**/*.jar', allowEmptyArchive: true
-                sh 'docker logout || true'
-                sh 'docker image prune -f || true'
-            }
-        }
-    }
-}
